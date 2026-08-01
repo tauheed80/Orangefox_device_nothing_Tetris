@@ -1,0 +1,10 @@
+//
+// FIX (Session 11): found missing via duchamp comparison. This is the
+// actual companion piece needed for PRODUCT_SOONG_NAMESPACES (added in
+// device.mk, Session 9) to function correctly -- that variable tells the
+// build to treat DEVICE_PATH as its own namespace, but the namespace
+// itself needs to be declared here.
+//
+
+soong_namespace {
+}

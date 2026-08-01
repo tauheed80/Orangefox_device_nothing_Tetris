@@ -1,0 +1,24 @@
+# VERIFIED against real firmware: extracted directly from the actual
+# vendor_boot.img RECOVERY ramdisk fragment of this device. The original
+# repo's version of this file additionally had "import /init.recovery.project.rc",
+# a reference to a file that does not exist anywhere on real Tetris/mt6878
+# hardware -- that line was copy-paste leftover from a different device's
+# template and has been removed.
+
+on init
+    # FIX: /dev/block/bootdevice/by-name/ is the standard Android alias many
+    # tools (including OrangeFox's own built-in "reflash recovery to other
+    # slot" dd command) assume exists. It was completely missing from this
+    # tree, causing: "dd if=/dev/block/bootdevice/by-name/vendor_boot_a ...
+    # ERROR: 1 / Failed to flash the /vendor_boot image" on real hardware.
+    # Target verified against the real device's fstab.mt6878 sysfs_path=
+    # value (112b0000.ufshci is the real UFS host controller address).
+    symlink /dev/block/platform/soc/112b0000.ufshci /dev/block/bootdevice
+
+    setprop sys.usb.configfs 1
+    setprop sys.usb.controller "11201000.usb0"
+    setprop sys.usb.ffs.aio_compat 1
+
+on fs && property:ro.debuggable=0
+    # set charging free due to it wait for USB activation
+    start adbd

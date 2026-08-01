@@ -1,0 +1,79 @@
+# TWRP / OrangeFox fstab for Nothing CMF Phone 1 (Tetris)
+# Format: <mount_point>  <fstype>  <device>  [<device2>]  [flags=...]
+#
+# FIX NOTE: The original file mixed stock Android init-fstab syntax
+# (avb=, slotselect, first_stage_mount, wait,check,...) with TWRP's own
+# fstab syntax. TWRP's fstab parser does not understand the stock syntax,
+# so /system /vendor /data etc. were silently skipped and never appeared
+# as mountable storage -- only the manually-correct /sdcard1 and /usb_otg
+# lines at the bottom worked. This is the direct cause of "Internal
+# Storage missing, only SD/USB shown."
+#
+# TWRP resolves the active A/B slot itself via ro.boot.slot_suffix, so
+# by-name paths below do NOT need a slotselect flag or _a/_b suffix.
+
+# FIX (v3, confirmed by real device log): these 7 lines were missing
+# flags=logical. Real recovery_error.txt showed every one of them failing
+# with "Actual block device: '', current file system: 'erofs'" — TWRP was
+# looking for a plain /dev/block/by-name/<X> symlink that doesn't exist,
+# because these partitions actually live inside super.img and are only
+# reachable after TWRP creates their device-mapper node. The `logical`
+# flag is what tells TWRP to do that instead of a plain by-name lookup.
+# (system_dlkm intentionally excluded — it is NOT part of
+# BOARD_NOTHING_DYNAMIC_PARTITIONS_PARTITION_LIST in BoardConfig.mk.)
+# FIX (v4): rewrote dynamic-partition lines to match the PROVEN, real,
+# exact-same-branch (fox_12.1) working format found in a real 165-star
+# device tree (Ctapchuk/android_device_xiaomi_marble-OFRP, POCO F5). That
+# tree uses the STANDARD Android fstab structure (<src> <mnt_point> <type>
+# <mnt_flags> <fs_mgr_flags>, comma-separated), not TWRP-native semicolon
+# syntax, for exactly these partitions -- with dual ext4+erofs entries so
+# either on-disk format resolves correctly. /data, /sdcard1, /usb_otg below
+# are left in TWRP-native syntax since THOSE specific lines have direct
+# proof of working on our own real hardware (recovery_error.txt) and
+# changing proven-working lines without cause would be reckless.
+#<src>        <mnt_point>    <type>  <mnt_flags>              <fs_mgr_flags>
+system         /system        ext4    ro,barrier=1,discard     wait,slotselect,avb=vbmeta_system,logical,first_stage_mount
+system         /system        erofs   ro                       wait,slotselect,avb=vbmeta_system,logical,first_stage_mount
+system_ext     /system_ext    ext4    ro,barrier=1,discard     wait,slotselect,avb=vbmeta_system,logical,first_stage_mount
+system_ext     /system_ext    erofs   ro                       wait,slotselect,avb=vbmeta_system,logical,first_stage_mount
+product        /product       ext4    ro,barrier=1,discard     wait,slotselect,avb=vbmeta_system,logical,first_stage_mount
+product        /product       erofs   ro                       wait,slotselect,avb=vbmeta_system,logical,first_stage_mount
+vendor         /vendor        ext4    ro,barrier=1,discard     wait,slotselect,avb,logical,first_stage_mount
+vendor         /vendor        erofs   ro                       wait,slotselect,avb,logical,first_stage_mount
+vendor_dlkm    /vendor_dlkm   ext4    ro,barrier=1,discard     wait,slotselect,avb,logical,first_stage_mount
+vendor_dlkm    /vendor_dlkm   erofs   ro                       wait,slotselect,avb,logical,first_stage_mount
+odm            /odm           ext4    ro,barrier=1,discard     wait,slotselect,avb,logical,first_stage_mount
+odm            /odm           erofs   ro                       wait,slotselect,avb,logical,first_stage_mount
+odm_dlkm       /odm_dlkm      ext4    ro,barrier=1,discard     wait,slotselect,avb,logical,first_stage_mount
+odm_dlkm       /odm_dlkm      erofs   ro                       wait,slotselect,avb,logical,first_stage_mount
+/system_dlkm    erofs   /dev/block/by-name/system_dlkm
+
+/metadata       f2fs    /dev/block/by-name/metadata
+
+# /data: keeps the SAME crypto parameters the stock-format line declared
+# (aes-256-xts:aes-256-cts:v2+inlinecrypt_optimized, metadata-encryption
+# keydirectory) -- just expressed in TWRP flag syntax instead of invented
+# from scratch. forcefdeorfbe tells TWRP to run its decrypt routine
+# instead of skipping it, which is what was previously being suppressed
+# by OF_DONT_PATCH_ENCRYPTED_DEVICE / OF_FBE_METADATA_MOUNT_IGNORE.
+# /data: FIXED (v2) — real device logs showed "Could not mount /data and
+# unable to find crypto footer" + "Unhandled flag: metadata_encryption".
+# Root cause: I had fabricated a flag named "metadata_encryption=" that
+# does not exist. The REAL flag, copied exactly from the verified stock
+# fstab.mt6878 dump, is "keydirectory=/metadata/vold/metadata_encryption".
+# Also dropped "forcefdeorfbe" (also logged as unhandled by this OrangeFox
+# build, and wasn't present in real stock data to begin with — fileencryption=
+# presence alone is what triggers TWRP's FBE decrypt path).
+# /data: v3 correction. Real recovery_error.txt from actual device showed
+# Is_Decrypted=true with metadata_encryption=aes-256-xts present — i.e. it
+# was NOT actually broken like I assumed in v2. Restoring it alongside
+# keydirectory= (both grounded in real evidence now) rather than choosing
+# one over the other on assumption alone.
+/data           f2fs    /dev/block/by-name/userdata    flags=fileencryption=aes-256-xts:aes-256-cts:v2+inlinecrypt_optimized;metadata_encryption=aes-256-xts;keydirectory=/metadata/vold/metadata_encryption;fsverity;length=-16384
+
+/mnt/vendor/persist  ext4    /dev/block/by-name/persist
+/misc           emmc    /dev/block/by-name/misc
+
+# Removable storage
+/sdcard1 auto /dev/block/mmcblk0p1 /dev/block/mmcblk0 flags=display="MicroSD";storage;wipeingui;removable
+/usb_otg auto /dev/block/sdd1 /dev/block/sdd flags=display="USB OTG";storage;wipeingui;removable
